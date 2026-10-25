@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var ErrNotFound = errors.New("Video Not Found")
+
 type Video struct {
 	ID           uuid.UUID `json:"id"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -113,7 +115,7 @@ func (c Client) GetVideo(id uuid.UUID) (Video, error) {
 		&video.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return Video{}, nil
+			return Video{}, ErrNotFound
 		}
 		return Video{}, err
 	}
@@ -129,7 +131,8 @@ func (c Client) UpdateVideo(video Video) error {
 		description = ?,
 		thumbnail_url = ?,
 		video_url = ?,
-		user_id = ?
+		user_id = ?,
+		updated_at = ?
 	WHERE id = ?
 	`
 
@@ -140,6 +143,7 @@ func (c Client) UpdateVideo(video Video) error {
 		&video.ThumbnailURL,
 		&video.VideoURL,
 		video.UserID,
+		video.UpdatedAt,
 		video.ID,
 	)
 	return err
