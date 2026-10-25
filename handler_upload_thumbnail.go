@@ -1,11 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -45,17 +46,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
 		return
 	}
-
-	var thumbnails thumbnail
-
-	b, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to read the file", err)
-		return
-	}
-
-	thumbnails.data = b
-	thumbnails.mediaType = header.Header.Get("Content-Type")
+	defer file.Close()
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -73,17 +64,23 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusForbidden, "Not Authorized", nil)
 		return
 	}
+	videoType := filepath.Ext(header.Filename)
 
+	destino , err := os.Create(filepath.Join(cfg.assetsRoot,fmt.Sprintf("%s%s",  videoIDString,videoType )))
+	if err!=nil{
+		respondWithError(w,http.StatusInternalServerError, err.Error(), err)
+	}
 
-	// thumbnailUrl := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	defer destino.Close()
 
-	//TODO: change later
-	// video.ThumbnailURL = &thumbnailUrl
-	str := base64.StdEncoding.EncodeToString(thumbnails.data)
+	io.Copy(destino, file)
+	if err!=nil{
+		respondWithError(w,http.StatusInternalServerError, err.Error(), err)
+	}
 
-	videoFormat := fmt.Sprintf("data:%s;base64,%s", thumbnails.mediaType, str)
-
-	video.ThumbnailURL = &videoFormat
+	thumbnailUrl := fmt.Sprintf("http://localhost:%s/assets/%s%s", cfg.port, videoID, videoType)
+	
+	video.ThumbnailURL = &thumbnailUrl
 	video.UpdatedAt = time.Now()
 
 	if err:= cfg.db.UpdateVideo(video); err!=nil{
